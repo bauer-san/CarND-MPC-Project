@@ -11,6 +11,7 @@ using json = nlohmann::json;
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
+double MPH2mps(double x) { return x * 0.44704; }
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -47,9 +48,9 @@ int main() {
           // j[1] is the data JSON object
           double cte = j[1]["cte"];
           double epsi = j[1]["epsi"];
-          double speed = j[1]["speed"];
+          double speed_MPH = j[1]["speed"];  // CAUTION: in MPH!!
           double throttle = j[1]["throttle"];
-          double angle = j[1]["steering_angle"];
+          double SWA = j[1]["steering_angle"];  // CAUTION: CCW positive!!
 
           /*
           * TODO: Calculate steeering angle and throttle here.
@@ -57,8 +58,17 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+		  vector<double> state;
+		  state.push_back(cte);
+		  state.push_back(epsi);
+		  state.push_back(MPH2mps(speed_MPH));
+		  state.push_back(throttle);
+		  state.push_back(SWA);
+
+		  auto vars = mpc.Solve(state);
+
+		  double steer_value = vars[3];
+		  double throttle_value = vars[4];
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
