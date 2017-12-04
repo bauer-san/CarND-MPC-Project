@@ -2,6 +2,8 @@
 #define MPC_H
 
 #include <vector>
+#include "Eigen-3.3/Eigen/Core"
+#include "Eigen-3.3/Eigen/QR"
 
 using namespace std;
 
@@ -14,7 +16,10 @@ class MPC {
   // Solve the model given an initial state.
   // Return the next state, inputs and cost.
   // NOTE: You may change the function signature it's helpful.
-  tuple<vector<double>, vector<double>, double> Solve(vector<double> x0);
+
+  //originally: tuple<vector<double>, vector<double>, double> Solve(vector<double> x0);
+  tuple<vector<double>, vector<double>, double> Solve(Eigen::VectorXd x0, Eigen::VectorXd coeffs);
+  
 };
 
 #endif /* MPC_H */

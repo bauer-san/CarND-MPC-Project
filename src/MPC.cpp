@@ -30,7 +30,7 @@ class FG_eval {
 MPC::MPC() {}
 MPC::~MPC() {}
 
-tuple<vector<double>, vector<double>, double> MPC::Solve(vector<double> x0) {
+tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eigen::VectorXd coeffs) {
   bool ok = true;
   size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
