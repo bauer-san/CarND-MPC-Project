@@ -109,24 +109,22 @@ int main() {
           //transform waypoints from global to vehicle coordinate system
           Eigen::VectorXd ptx(ptsx.size()), pty(ptsy.size()); // desired path waypoints, vehicle coordinates
           for (int i = 0; i < ptx.size(); i++) {
-            ptx[i] = ptsx[i]-px;
-            pty[i] = ptsy[i]-py;
+            double tempx = ptsx[i] - px;
+            double tempy = ptsy[i] - py;
+            ptx[i] = tempx*cos(0 - psi) - tempy*sin(0 - psi);
+            pty[i] = tempx*sin(0 - psi) + tempy*cos(0 - psi);
           }
-
-          std::cout << "x:" << ptx << std::endl;
-          std::cout << "y:" << pty << std::endl;
 
           // fit a polynomial to the above x and y coordinates
           int poly_order = 3;
           auto coeffs = polyfit(ptx, pty, poly_order);
-          std::cout << "coeffs:" << coeffs << std::endl;
 
           // build the desired path
           vector<double> next_x, next_y; // desired path, vehicle coordinates
           int n_points = 10;
           int xstepsize = 2;
           for (int i = 0; i < n_points; i++) {
-            double xstep = (double) i*xstepsize;
+            double xstep = (double) std::pow(1.5,i)*xstepsize;
             next_x.push_back(xstep);
             next_y.push_back(polyeval(coeffs, xstep));
           }
