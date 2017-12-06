@@ -70,7 +70,6 @@ std::string hasData(std::string s) {
 int main() {
   uWS::Hub h;
 
-  // MPC is initialized here!
   MPC mpc;
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -97,62 +96,89 @@ int main() {
           //    "throttle" : 0, 
           //    "speed" : 6.619145E-06}
 
-          vector<double> ptsx = j[1]["ptsx"]; // x waypoints, global coordinates
-          vector<double> ptsy = j[1]["ptsy"]; // y waypoints, global coordinates
-          double px = j[1]["x"];  // x position, vehicle coordinates
-          double py = j[1]["y"];  // y position, vehicle coordinates
-          double speed_MPH = j[1]["speed"];  // CAUTION: in MPH!!
-          double psi = j[1]["psi"]; // heading, global coordinates
+          vector<double> ptsx = j[1]["ptsx"];   // x waypoints, global coordinates
+          vector<double> ptsy = j[1]["ptsy"];   // y waypoints, global coordinates
+          double px = j[1]["x"];                // x position, vehicle coordinates
+          double py = j[1]["y"];                // y position, vehicle coordinates
+          double speedMPH = j[1]["speed"];      // velocity, MPH
+          double psi = j[1]["psi"];             // heading, DEGREES global coordinates
           double SWA = j[1]["steering_angle"];  // CAUTION: CCW positive!!
-          double throttle = j[1]["throttle"]; // [-1, 1]
+          double throttle = j[1]["throttle"];   // [-1, 1]
 
-          //transform waypoints from global to vehicle coordinate system
+          /*
+              Transform waypoints of DESIRED PATH from 
+              GLOBAL to VEHICLE coordinate system
+          */
           Eigen::VectorXd ptx(ptsx.size()), pty(ptsy.size()); // desired path waypoints, vehicle coordinates
           for (int i = 0; i < ptx.size(); i++) {
             double tempx = ptsx[i] - px;
             double tempy = ptsy[i] - py;
-            ptx[i] = tempx*cos(0 - psi) - tempy*sin(0 - psi);
-            pty[i] = tempx*sin(0 - psi) + tempy*cos(0 - psi);
+            //double psi_rad = deg2rad(psi);  //TODO: strange
+            double psi_rad = psi;
+            ptx[i] = tempx*cos(0 - psi_rad) - tempy*sin(0 - psi_rad);
+            pty[i] = tempx*sin(0 - psi_rad) + tempy*cos(0 - psi_rad);
           }
 
-          // fit a polynomial to the above x and y coordinates
+          /*
+              Fit a polynomial to the above x and y coordinates
+          */
           int poly_order = 3;
           auto coeffs = polyfit(ptx, pty, poly_order);
 
-          // build the desired path
-          vector<double> next_x, next_y; // desired path, vehicle coordinates
+          double cte = coeffs[0];    // cross-track error, m  (SIMPLIFIED from 'polyeval(coeffs, 0.)')
+          double epsi = -atan(coeffs[1]);       // heading error, radians
+
+		      Eigen::VectorXd ego_vehicle_state(6); // The states are: x=0, y=0, psi=0, v, cte, epsi
+		      ego_vehicle_state << 0., 0., 0., MPH2mps(speedMPH), cte, epsi;
+		      auto vars = mpc.Solve(ego_vehicle_state, coeffs);
+
+          json msgJson;
+
+          /*
+              Actuator commands
+          */
+          auto u1 = std::get<0>(vars); // first element returned from solution has the actuator command: swa, throttle
+          double cmdSWA = u1[0];
+          double cmdTHROTTLE = u1[1];
+          msgJson["steering_angle"] = cmdSWA;
+          msgJson["throttle"] = cmdTHROTTLE;
+
+          /*
+              Unravel the path from the MPC solution
+
+              The MPC path is visualized in the simulator as a GREEN line
+          */
+          auto x1 = std::get<1>(vars); // second element returned from solution has the x and y coordinates in a flattened vector
+          vector<double> mpc_x, mpc_y; // solver path, VEHICLE coordinates
+          for (int i = 0; i < 25; i++) { //unravel the x and y coordinates returned from solver // TODO: fix this magic number
+            mpc_x.push_back(x1[2*i]);
+            mpc_y.push_back(x1[2*i+1]);
+          }
+          msgJson["mpc_x"] = mpc_x;
+          msgJson["mpc_y"] = mpc_y;
+
+          /*
+              Build the DESIRED path
+
+              The DESIRED path is visualized in the simulator as a YELLOW line
+          */
+          vector<double> next_x, next_y; // desired path, VEHICLE coordinates
           int n_points = 10;
           int xstepsize = 2;
           for (int i = 0; i < n_points; i++) {
-            double xstep = (double) std::pow(1.5,i)*xstepsize;
+            double xstep = (double)std::pow(1.5, i)*xstepsize;
             next_x.push_back(xstep);
             next_y.push_back(polyeval(coeffs, xstep));
           }
-
-          double cte = pty[0]; // cross-track error, m
-          double epsi = psi; // heading error, radians
-
-		      Eigen::VectorXd state(6); // The states are: x, y, psi, v, cte, epsi
-		      state << 0., 0., 0., MPH2mps(speed_MPH), cte, epsi;
-
-		      //auto vars = mpc.Solve(state, coeffs);
-
-          double steer_value=0.; // = vars[3];
-          double throttle_value=0.; // = vars[4];
-
-          json msgJson;
-          msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = throttle_value;
-#if (0)
-          msgJson["mpc_x"] = mpc_x;
-          msgJson["mpc_y"] = mpc_y;
-#endif
           msgJson["next_x"] = next_x;
           msgJson["next_y"] = next_y;
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+//          std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+#if(1)
+          std::cout << px << ", "<< py << ", " << psi << ", " << speedMPH << ", " << cte << ", " << epsi << ", " << cmdSWA << ", " << cmdTHROTTLE << std::endl;
+#endif
         }
       } else {
         // Manual driving
