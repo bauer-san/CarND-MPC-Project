@@ -2,6 +2,25 @@
 Self-Driving Car Engineer Nanodegree Program
 
 ---
+## Implementation
+
+
+### The Model
+*(Describe the model in detail. Includes the state, actuators and update equations.)*
+
+### Timestep Length and Elapsed Duration (N & dt)
+*Student discusses the reasoning behind the chosen N (timestep length) and dt (elapsed duration between timesteps) values. Additionally the student details the previous values tried.*
+
+### Polynomial Fitting and MPC Preprocessing
+*If the student preprocesses waypoints, the vehicle state, and/or actuators prior to the MPC procedure it is described.*
+
+### Model Predictive Control with Latency
+*The student implements Model Predictive Control that handles a 100 millisecond latency. Student provides details on how they deal with latency.*
+
+My solution for latency includes an additional state for the steering signal.  This seems to be more sensible than projecting the measured state froward because IRL this additional steering state would include the dynamics of the steering system.  For the course, I will test a simple delay.
+
+
+---
 
 ## Dependencies
 
