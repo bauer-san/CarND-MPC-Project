@@ -12,7 +12,7 @@ namespace {
 using CppAD::AD;
 
 size_t N=25;
-double dt=0.05;
+double dt=0.1;
 
 // NOTE: DON'T CHANGE THIS IT WAS CAREFULLY CHOSEN!!!
 const double Lf = 2.67;
@@ -115,10 +115,8 @@ class FG_eval {
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
       fg[1 + psi_start + t] = psi1 - (psi0 - v0 * delta0 / Lf * dt); // corrected for steering orientation
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
-      fg[1 + cte_start + t] =
-        cte1 - ((y0 - f0) + (v0 * CppAD::sin(epsi0) * dt)); // original:         cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-      fg[1 + epsi_start + t] =
-        epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
+      fg[1 + cte_start + t] = cte1 - ((y0 - f0) + (v0 * CppAD::sin(epsi0) * dt)); // original: cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
+      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
     }
   }
 };
@@ -142,10 +140,12 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   double cte = x0[4];
   double epsi = x0[5];
 
+  int n_states = 6;
+
   // Number of variables (includes both states and inputs)
-  size_t n_vars = N * 6 + (N - 1) * 2;
+  size_t n_vars = N * n_states + (N - 1) * 2;
   // Number of constraints
-  size_t n_constraints = N * 6;
+  size_t n_constraints = N * n_states;
 
   // Initial value of the independent variables.
   // Should be 0 besides initial state.
