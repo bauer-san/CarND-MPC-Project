@@ -101,8 +101,8 @@ int main() {
           double px = j[1]["x"];                // x position, vehicle coordinates
           double py = j[1]["y"];                // y position, vehicle coordinates
           double speedMPH = j[1]["speed"];      // velocity, MPH
-          double psi = j[1]["psi"];             // heading, DEGREES global coordinates
-          double SWA = j[1]["steering_angle"];  // CAUTION: CCW positive!!
+          double psi = j[1]["psi"];             // heading, DEGREES? global coordinates
+          double SWA = j[1]["steering_angle"];  // radians CAUTION: CCW positive!!
           double throttle = j[1]["throttle"];   // [-1, 1]
 
           /*
@@ -125,11 +125,11 @@ int main() {
           int poly_order = 3;
           auto coeffs = polyfit(ptx, pty, poly_order);
 
-          double cte = coeffs[0];    // cross-track error, m  (SIMPLIFIED from 'polyeval(coeffs, 0.)')
+          double cte = coeffs[0];               // cross-track error, m  (SIMPLIFIED from 'polyeval(coeffs, 0.)')
           double epsi = -atan(coeffs[1]);       // heading error, radians
 
-		      Eigen::VectorXd ego_vehicle_state(6); // The states are: x=0, y=0, psi=0, v, cte, epsi
-		      ego_vehicle_state << 0., 0., 0., MPH2mps(speedMPH), cte, epsi;
+		      Eigen::VectorXd ego_vehicle_state(7); // The states are: x=0, y=0, psi=0, v, cte, epsi, SWA
+		      ego_vehicle_state << 0., 0., 0., MPH2mps(speedMPH), cte, epsi, SWA;
 		      auto vars = mpc.Solve(ego_vehicle_state, coeffs);
 
           json msgJson;
@@ -177,7 +177,7 @@ int main() {
 //          std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 #if(1)
-          std::cout << px << ", "<< py << ", " << psi << ", " << speedMPH << ", " << cte << ", " << epsi << ", " << cmdSWA << ", " << cmdTHROTTLE << std::endl;
+          std::cout << px << ", "<< py << ", " << psi << ", " << speedMPH << ", " << cte << ", " << epsi << ", " << SWA << ", " << cmdSWA << ", " << cmdTHROTTLE << std::endl;
 #endif
         }
       } else {

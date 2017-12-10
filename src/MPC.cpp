@@ -11,7 +11,7 @@ Additionally, there's a 100 millisecond latency between actuations commands on t
 namespace {
 using CppAD::AD;
 
-size_t N=25;
+size_t N=10;
 double dt=0.1;
 
 // NOTE: DON'T CHANGE THIS IT WAS CAREFULLY CHOSEN!!!
@@ -30,7 +30,9 @@ size_t psi_start = y_start + N;
 size_t v_start = psi_start + N;
 size_t cte_start = v_start + N;
 size_t epsi_start = cte_start + N;
-size_t delta_start = epsi_start + N;
+size_t deltaLBO_start = epsi_start + N;
+size_t delta_start = deltaLBO_start + N;
+//size_t delta_start = epsi_start + N;
 size_t a_start = delta_start + N - 1;
 
 class FG_eval {
@@ -75,6 +77,7 @@ class FG_eval {
     fg[1 + v_start] = vars[v_start];
     fg[1 + cte_start] = vars[cte_start];
     fg[1 + epsi_start] = vars[epsi_start];
+    fg[1 + deltaLBO_start] = vars[deltaLBO_start];
 
     // The rest of the constraints
     for (int t = 1; t < N; t++) {
@@ -85,6 +88,7 @@ class FG_eval {
       AD<double> v1 = vars[v_start + t];
       AD<double> cte1 = vars[cte_start + t];
       AD<double> epsi1 = vars[epsi_start + t];
+      AD<double> deltaLBO1 = vars[deltaLBO_start + t];
 
       // The state at time t.
       AD<double> x0 = vars[x_start + t - 1];
@@ -93,6 +97,7 @@ class FG_eval {
       AD<double> v0 = vars[v_start + t - 1];
       AD<double> cte0 = vars[cte_start + t - 1];
       AD<double> epsi0 = vars[epsi_start + t - 1];
+      AD<double> deltaLBO0 = vars[deltaLBO_start + t - 1];
 
       // Only consider the actuation at time t.
       AD<double> delta0 = vars[delta_start + t - 1];
@@ -101,22 +106,21 @@ class FG_eval {
       AD<double> f0 = coeffs[0] + coeffs[1] * x0;
       AD<double> psides0 = CppAD::atan(coeffs[1]);
 
-      // Here's `x` to get you started.
-      // The idea here is to constraint this value to be 0.
-      //
-      // Recall the equations for the model:
+      // Recall the equations for the kinematic motion model:
       // x_[t+1] = x[t] + v[t] * cos(psi[t]) * dt
       // y_[t+1] = y[t] + v[t] * sin(psi[t]) * dt
       // psi_[t+1] = psi[t] + v[t] / Lf * delta[t] * dt
       // v_[t+1] = v[t] + a[t] * dt
       // cte[t+1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt
       // epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt
+      // The idea here is to constraint this value to be 0.
       fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
       fg[1 + psi_start + t] = psi1 - (psi0 - v0 * delta0 / Lf * dt); // corrected for steering orientation
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
       fg[1 + cte_start + t] = cte1 - ((y0 - f0) + (v0 * CppAD::sin(epsi0) * dt)); // original: cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
       fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
+      fg[1 + deltaLBO_start + t] = deltaLBO1 - delta0;        // deltaLBO[t+1] = delta[t]
     }
   }
 };
@@ -139,8 +143,9 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   double v = x0[3];
   double cte = x0[4];
   double epsi = x0[5];
+  double delta_LBO = x0[6];
 
-  int n_states = 6;
+  int n_states = 7;
 
   // Number of variables (includes both states and inputs)
   size_t n_vars = N * n_states + (N - 1) * 2;
@@ -161,13 +166,14 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   vars[v_start] = v;
   vars[cte_start] = cte;
   vars[epsi_start] = epsi;
+  vars[deltaLBO_start] = delta_LBO;
 
   // Lower and upper limits for states, inputs
   Dvector vars_lowerbound(n_vars), vars_upperbound(n_vars);
 
   // Set all non-actuators upper and lowerlimits
   // to the max negative and positive values.
-  for (int i = 0; i < delta_start; i++) {
+  for (int i = 0; i < deltaLBO_start; i++) {
     vars_lowerbound[i] = -1.0e19;
     vars_upperbound[i] = 1.0e19;
   }
@@ -175,6 +181,10 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   // The upper and lower limits of delta are set to -25 and 25
   // degrees (values in radians).
   // NOTE: Feel free to change this to something else.
+  for (int i = deltaLBO_start; i < delta_start; i++) {  //DELTA LBO
+    vars_lowerbound[i] = -0.436332;  //TODO: adjust
+    vars_upperbound[i] = 0.436332;
+  }
   for (int i = delta_start; i < a_start; i++) {
     vars_lowerbound[i] = -0.436332;  //TODO: adjust
     vars_upperbound[i] = 0.436332;
@@ -201,6 +211,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   constraints_lowerbound[v_start] = v;
   constraints_lowerbound[cte_start] = cte;
   constraints_lowerbound[epsi_start] = epsi;
+  constraints_lowerbound[deltaLBO_start] = delta_LBO;
 
   constraints_upperbound[x_start] = x;
   constraints_upperbound[y_start] = y;
@@ -208,6 +219,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   constraints_upperbound[v_start] = v;
   constraints_upperbound[cte_start] = cte;
   constraints_upperbound[epsi_start] = epsi;
+  constraints_upperbound[deltaLBO_start] = delta_LBO;
 
   //
   // NOTE: Most of this stuff you don't have to worry about
@@ -247,6 +259,13 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
     x1.push_back(solution.x[x_start+i]);  // x
     x1.push_back(solution.x[y_start+i]);  // y
   }
+
+#if(1)
+  std::cout << "solution.x" << std::endl;
+  for (int i = deltaLBO_start; i < delta_start; i++) {
+    std::cout << i << ", " << solution.x[i] << ", " << solution.x[i+N] << std::endl;
+  }
+#endif
 
   auto u1 = {solution.x[delta_start]/ (25.*M_PI/180.*Lf), solution.x[a_start]};
   
