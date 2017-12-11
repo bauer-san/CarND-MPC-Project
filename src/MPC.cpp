@@ -5,21 +5,22 @@
 /*
 In this project you'll implement Model Predictive Control to drive the car around the track. 
 This time however you're not given the cross track error, you'll have to calculate that yourself! 
+
 Additionally, there's a 100 millisecond latency between actuations commands on top of the connection latency.
 */
 
 namespace {
 using CppAD::AD;
 
-size_t N=25;
+size_t N=10;
 double dt=0.1;
 
 // NOTE: DON'T CHANGE THIS IT WAS CAREFULLY CHOSEN!!!
 const double Lf = 2.67;
 
-double ref_v = 5;	// reference longitudinal velocity, mps
-double ref_cte = 0.05; // reference cte, meters
-double ref_epsi = 2.*M_PI/180.; // reference psi, radians
+double ref_v = 20;	// reference longitudinal velocity, mps
+double ref_cte = 0.; // reference cte, meters
+double ref_epsi = 0.; // 2.*M_PI / 180.; // reference psi, radians
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -98,8 +99,13 @@ class FG_eval {
       AD<double> delta0 = vars[delta_start + t - 1];
       AD<double> a0 = vars[a_start + t - 1];
 
-      AD<double> f0 = coeffs[0] + coeffs[1] * x0;
-      AD<double> psides0 = CppAD::atan(coeffs[1]);
+      AD<double> f0 =   coeffs[0]
+                      + coeffs[1] * x0
+                      + coeffs[2] * x0 * x0
+                      + coeffs[3] * x0 * x0 * x0;
+      AD<double> psides0 = CppAD::atan(      coeffs(1)
+                                       + 2 * coeffs(2)*x0
+                                       + 3 * coeffs(3)*x0*x0);
 
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
@@ -184,7 +190,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   // NOTE: Feel free to change this to something else.
   for (int i = a_start; i < n_vars; i++) {
     vars_lowerbound[i] = -0.4; //TODO: adjust
-    vars_upperbound[i] = 0.4;
+    vars_upperbound[i] = 1.0;
   }
 
   // Lower and upper limits for the constraints
@@ -248,7 +254,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
     x1.push_back(solution.x[y_start+i]);  // y
   }
 
-  auto u1 = {solution.x[delta_start]/ (25.*M_PI/180.*Lf), solution.x[a_start]};
+  auto u1 = {solution.x[delta_start+1]/ (25.*M_PI/180.*Lf), solution.x[a_start]};
   
   auto cost = solution.obj_value;
   //return std::make_tuple(x1, u1, cost);
