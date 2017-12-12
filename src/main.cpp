@@ -125,7 +125,7 @@ int main() {
           int poly_order = 3;
           auto coeffs = polyfit(ptx, pty, poly_order);
 
-          double cte = polyeval(coeffs, 0.);    // cross-track error, m
+          double cte = -polyeval(coeffs, 0.);    // cross-track error, m
           double epsi = -atan(coeffs[1]);       // heading error, radians
 
 		      Eigen::VectorXd ego_vehicle_state(6); // The states are: x=0, y=0, psi=0, v, cte, epsi
@@ -163,8 +163,8 @@ int main() {
               The DESIRED path is visualized in the simulator as a YELLOW line
           */
           vector<double> next_x, next_y; // desired path, VEHICLE coordinates
-          int n_points = 10;
-          int xstepsize = 2;
+          int n_points = 5; //10
+          int xstepsize = 8;
           for (int i = 0; i < n_points; i++) {
             double xstep = (double)std::pow(1.5, i)*xstepsize;
             next_x.push_back(xstep);
