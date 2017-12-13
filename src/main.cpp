@@ -128,8 +128,8 @@ int main() {
           double cte = -polyeval(coeffs, 0.);    // cross-track error, m
           double epsi = -atan(coeffs[1]);       // heading error, radians
 
-		      Eigen::VectorXd ego_vehicle_state(6); // The states are: x=0, y=0, psi=0, v, cte, epsi
-		      ego_vehicle_state << 0., 0., 0., MPH2mps(speedMPH), cte, epsi;
+		      Eigen::VectorXd ego_vehicle_state(7); // The states are: x=0, y=0, psi=0, v, cte, epsi, SWA
+		      ego_vehicle_state << 0., 0., 0., MPH2mps(speedMPH), cte, epsi, SWA;
 		      auto vars = mpc.Solve(ego_vehicle_state, coeffs);
 
           json msgJson;
@@ -176,8 +176,8 @@ int main() {
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
 //          std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-#if(1)
-          std::cout << px << ", "<< py << ", " << psi << ", " << speedMPH << ", " << cte << ", " << epsi << ", " << cmdSWA << ", " << cmdTHROTTLE << std::endl;
+#if(0)
+          std::cout << px << ", "<< py << ", " << psi << ", " << speedMPH << ", " << cte << ", " << epsi << ", " << SWA << ", " << cmdSWA << ", " << cmdTHROTTLE << std::endl;
 #endif
         }
       } else {
