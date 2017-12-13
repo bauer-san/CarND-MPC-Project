@@ -101,8 +101,8 @@ int main() {
           double px = j[1]["x"];                // x position, vehicle coordinates
           double py = j[1]["y"];                // y position, vehicle coordinates
           double speedMPH = j[1]["speed"];      // velocity, MPH
-          double psi = j[1]["psi"];             // heading, DEGREES? global coordinates
-          double SWA = j[1]["steering_angle"];  // radians CAUTION: CCW positive!!
+          double psi = j[1]["psi"];             // heading, RADIANS global coordinates
+          double SWA = j[1]["steering_angle"];  // RADIANS CAUTION: CCW positive!!
           double throttle = j[1]["throttle"];   // [-1, 1]
 
           /*
@@ -125,7 +125,7 @@ int main() {
           int poly_order = 3;
           auto coeffs = polyfit(ptx, pty, poly_order);
 
-          double cte = coeffs[0];               // cross-track error, m  (SIMPLIFIED from 'polyeval(coeffs, 0.)')
+          double cte = -polyeval(coeffs, 0.);    // cross-track error, m
           double epsi = -atan(coeffs[1]);       // heading error, radians
 
 		      Eigen::VectorXd ego_vehicle_state(7); // The states are: x=0, y=0, psi=0, v, cte, epsi, SWA
@@ -150,7 +150,7 @@ int main() {
           */
           auto x1 = std::get<1>(vars); // second element returned from solution has the x and y coordinates in a flattened vector
           vector<double> mpc_x, mpc_y; // solver path, VEHICLE coordinates
-          for (int i = 0; i < 25; i++) { //unravel the x and y coordinates returned from solver // TODO: fix this magic number
+          for (int i = 0; i < 10; i++) { //unravel the x and y coordinates returned from solver // TODO: fix this magic number
             mpc_x.push_back(x1[2*i]);
             mpc_y.push_back(x1[2*i+1]);
           }
@@ -163,8 +163,8 @@ int main() {
               The DESIRED path is visualized in the simulator as a YELLOW line
           */
           vector<double> next_x, next_y; // desired path, VEHICLE coordinates
-          int n_points = 10;
-          int xstepsize = 2;
+          int n_points = 5; //10
+          int xstepsize = 8;
           for (int i = 0; i < n_points; i++) {
             double xstep = (double)std::pow(1.5, i)*xstepsize;
             next_x.push_back(xstep);
@@ -176,7 +176,7 @@ int main() {
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
 //          std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-#if(1)
+#if(0)
           std::cout << px << ", "<< py << ", " << psi << ", " << speedMPH << ", " << cte << ", " << epsi << ", " << SWA << ", " << cmdSWA << ", " << cmdTHROTTLE << std::endl;
 #endif
         }

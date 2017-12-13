@@ -5,21 +5,22 @@
 /*
 In this project you'll implement Model Predictive Control to drive the car around the track. 
 This time however you're not given the cross track error, you'll have to calculate that yourself! 
+
 Additionally, there's a 100 millisecond latency between actuations commands on top of the connection latency.
 */
 
 namespace {
 using CppAD::AD;
 
-size_t N=10;
-double dt=0.1;
+const size_t N=10;
+const double dt=0.1;
 
 // NOTE: DON'T CHANGE THIS IT WAS CAREFULLY CHOSEN!!!
 const double Lf = 2.67;
 
-double ref_v = 5;	// reference longitudinal velocity, mps
-double ref_cte = 0.05; // reference cte, meters
-double ref_epsi = 2.*M_PI/180.; // reference psi, radians
+const double ref_v = 15.;	// reference longitudinal velocity, mps
+const double ref_cte = 0.; // reference cte, meters
+const double ref_epsi = 0.*M_PI / 180.; // reference psi, radians
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -49,9 +50,12 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (int t = 0; t < N; t++) {
-      fg[0] += CppAD::pow(vars[cte_start + t] - ref_cte, 2);
+      fg[0] += t/2*CppAD::pow(vars[cte_start + t] - ref_cte, 2);
+//      std::cout << "cte: " << fg[0] << std::endl;
       fg[0] += CppAD::pow(vars[epsi_start + t] - ref_epsi, 2);
+//      std::cout << "epsi: " << fg[0] << std::endl;
       fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
+//      std::cout << "v: " << fg[0] << std::endl;
     }
 
     // Minimize the use of actuators.
@@ -62,6 +66,7 @@ class FG_eval {
 
     // Minimize the value gap between sequential actuations.
     for (int t = 0; t < N - 2; t++) {
+      fg[0] += CppAD::pow(vars[deltaLBO_start + t + 1] - vars[deltaLBO_start + t], 2);
       fg[0] += CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
       fg[0] += CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
@@ -103,8 +108,13 @@ class FG_eval {
       AD<double> delta0 = vars[delta_start + t - 1];
       AD<double> a0 = vars[a_start + t - 1];
 
-      AD<double> f0 = coeffs[0] + coeffs[1] * x0;
-      AD<double> psides0 = CppAD::atan(coeffs[1]);
+      AD<double> f0 =   coeffs[0]
+                      + coeffs[1] * x0
+                      + coeffs[2] * x0 * x0
+                      + coeffs[3] * x0 * x0 * x0;
+      AD<double> psides0 = CppAD::atan(      coeffs(1)
+                                       + 2 * coeffs(2) * x0
+                                       + 3 * coeffs(3) * x0 * x0);
 
       // Recall the equations for the kinematic motion model:
       // x_[t+1] = x[t] + v[t] * cos(psi[t]) * dt
@@ -113,14 +123,14 @@ class FG_eval {
       // v_[t+1] = v[t] + a[t] * dt
       // cte[t+1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt
       // epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt
-      // The idea here is to constraint this value to be 0.
+      // deltaLBO[t+1] = delta[t]
       fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-      fg[1 + psi_start + t] = psi1 - (psi0 - v0 * delta0 / Lf * dt); // corrected for steering orientation
+      fg[1 + psi_start + t] = psi1 - (psi0 - v0 * deltaLBO0 / Lf * dt); // corrected for steering orientation
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
       fg[1 + cte_start + t] = cte1 - ((y0 - f0) + (v0 * CppAD::sin(epsi0) * dt)); // original: cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
-      fg[1 + deltaLBO_start + t] = deltaLBO1 - delta0;        // deltaLBO[t+1] = delta[t]
+      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) - v0 * deltaLBO0 / Lf * dt); // corrected for steering orientation
+      fg[1 + deltaLBO_start + t] = deltaLBO1 - delta0; // deltaLBO[t+1] = delta[t]
     }
   }
 };
@@ -143,7 +153,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   double v = x0[3];
   double cte = x0[4];
   double epsi = x0[5];
-  double delta_LBO = x0[6];
+  double delta = x0[6];
 
   int n_states = 7;
 
@@ -166,7 +176,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   vars[v_start] = v;
   vars[cte_start] = cte;
   vars[epsi_start] = epsi;
-  vars[deltaLBO_start] = delta_LBO;
+  vars[deltaLBO_start] = delta;
 
   // Lower and upper limits for states, inputs
   Dvector vars_lowerbound(n_vars), vars_upperbound(n_vars);
@@ -211,7 +221,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   constraints_lowerbound[v_start] = v;
   constraints_lowerbound[cte_start] = cte;
   constraints_lowerbound[epsi_start] = epsi;
-  constraints_lowerbound[deltaLBO_start] = delta_LBO;
+  constraints_lowerbound[deltaLBO_start] = delta;
 
   constraints_upperbound[x_start] = x;
   constraints_upperbound[y_start] = y;
@@ -219,7 +229,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   constraints_upperbound[v_start] = v;
   constraints_upperbound[cte_start] = cte;
   constraints_upperbound[epsi_start] = epsi;
-  constraints_upperbound[deltaLBO_start] = delta_LBO;
+  constraints_upperbound[deltaLBO_start] = delta;
 
   //
   // NOTE: Most of this stuff you don't have to worry about
@@ -260,14 +270,15 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
     x1.push_back(solution.x[y_start+i]);  // y
   }
 
-#if(1)
+#if(0)
   std::cout << "solution.x" << std::endl;
   for (int i = deltaLBO_start; i < delta_start; i++) {
     std::cout << i << ", " << solution.x[i] << ", " << solution.x[i+N] << std::endl;
   }
 #endif
 
-  auto u1 = {solution.x[delta_start]/ (25.*M_PI/180.*Lf), solution.x[a_start]};
+  //OG latency compensation: auto u1 = { solution.x[delta_start + 1] / (25.*M_PI / 180.), solution.x[a_start] };
+  auto u1 = { solution.x[deltaLBO_start+1] / (25.*M_PI / 180.), solution.x[a_start] };
   
   auto cost = solution.obj_value;
   //return std::make_tuple(x1, u1, cost);

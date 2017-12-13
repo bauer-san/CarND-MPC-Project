@@ -6,20 +6,20 @@ Self-Driving Car Engineer Nanodegree Program
 
 
 ### The Model
-*(Describe the model in detail. Includes the state, actuators and update equations.)*
+The model is the same motion model that was used in the class with states:
+ego vehicle x position, ego vehicle y position, ego vehicle heading (psi), ego vehicle longitudinal velocity, cross track error, and heading error.
 
 ### Timestep Length and Elapsed Duration (N & dt)
-*Student discusses the reasoning behind the chosen N (timestep length) and dt (elapsed duration between timesteps) values. Additionally the student details the previous values tried.*
+I chose a value of 0.1 sec for dt because it fit with the model latency and a value of 10 loops for N to keep the compute time small-ish.
 
 ### Polynomial Fitting and MPC Preprocessing
-*If the student preprocesses waypoints, the vehicle state, and/or actuators prior to the MPC procedure it is described.*
+A simple 3rd order polynomial fit was used.
 
 ### Model Predictive Control with Latency
-*The student implements Model Predictive Control that handles a 100 millisecond latency. Student provides details on how they deal with latency.*
+My preferred solution for latency includes adding a state for the steering signal.  This seems to be more sensible than projecting the measured state forward because IRL this additional steering state would include the dynamics of the steering system.  However, for this submission, I will test a delay of a single timestep (dt=0.1) by using the solution.x[delta_start+**1**]
 
-My solution for latency includes an additional state for the steering signal.  This seems to be more sensible than projecting the measured state froward because IRL this additional steering state would include the dynamics of the steering system.  For the course, I will test a simple delay.
-
-
+I have been working on my preferred solution on a branch but it is not ready yet and the project is due.
+ 
 ---
 
 ## Dependencies
