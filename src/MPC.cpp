@@ -18,9 +18,9 @@ double dt=0.1;
 // NOTE: DON'T CHANGE THIS IT WAS CAREFULLY CHOSEN!!!
 const double Lf = 2.67;
 
-double ref_v = 20;	// reference longitudinal velocity, mps
-double ref_cte = 0.; // reference cte, meters
-double ref_epsi = 0.; // 2.*M_PI / 180.; // reference psi, radians
+double ref_v = 15.;	// reference longitudinal velocity, mps
+double ref_cte = -0.5; // reference cte, meters
+double ref_epsi = 2.*M_PI / 180.; // reference psi, radians
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -48,9 +48,12 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (int t = 0; t < N; t++) {
-      fg[0] += CppAD::pow(vars[cte_start + t] - ref_cte, 2);
+      fg[0] += 1. / (t+.001)*CppAD::pow(vars[cte_start + t] - ref_cte, 2);
+//      std::cout << "cte: " << fg[0] << std::endl;
       fg[0] += CppAD::pow(vars[epsi_start + t] - ref_epsi, 2);
-      fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
+//      std::cout << "epsi: " << fg[0] << std::endl;
+      fg[0] += 2*CppAD::pow(vars[v_start + t] - ref_v, 2);
+//      std::cout << "v: " << fg[0] << std::endl;
     }
 
     // Minimize the use of actuators.
@@ -123,7 +126,7 @@ class FG_eval {
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
       //fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt)); //original
       fg[1 + cte_start + t] = cte1 - ((y0 - f0) + (v0 * CppAD::sin(epsi0) * dt));  // correction
-      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
+      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) - v0 * delta0 / Lf * dt); // corrected for steering orientation
     }
   }
 };
@@ -140,12 +143,12 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
 
-  double x = x0[0];
-  double y = x0[1];
-  double psi = x0[2];
-  double v = x0[3];
-  double cte = x0[4];
-  double epsi = x0[5];
+  const double x = x0[0];
+  const double y = x0[1];
+  const double psi = x0[2];
+  const double v = x0[3];
+  const double cte = x0[4];
+  const double epsi = x0[5];
 
   int n_states = 6;
 
