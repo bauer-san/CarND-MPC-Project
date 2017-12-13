@@ -12,15 +12,15 @@ Additionally, there's a 100 millisecond latency between actuations commands on t
 namespace {
 using CppAD::AD;
 
-size_t N=10;
-double dt=0.1;
+const size_t N=10;
+const double dt=0.1;
 
 // NOTE: DON'T CHANGE THIS IT WAS CAREFULLY CHOSEN!!!
 const double Lf = 2.67;
 
-double ref_v = 15.;	// reference longitudinal velocity, mps
-double ref_cte = -0.5; // reference cte, meters
-double ref_epsi = 2.*M_PI / 180.; // reference psi, radians
+const double ref_v = 15.;	// reference longitudinal velocity, mps
+const double ref_cte = 0.; // reference cte, meters
+const double ref_epsi = 0.*M_PI / 180.; // reference psi, radians
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -48,11 +48,11 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (int t = 0; t < N; t++) {
-      fg[0] += 1. / (t+.001)*CppAD::pow(vars[cte_start + t] - ref_cte, 2);
+      fg[0] += t/2*CppAD::pow(vars[cte_start + t] - ref_cte, 2);
 //      std::cout << "cte: " << fg[0] << std::endl;
       fg[0] += CppAD::pow(vars[epsi_start + t] - ref_epsi, 2);
 //      std::cout << "epsi: " << fg[0] << std::endl;
-      fg[0] += 2*CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
 //      std::cout << "v: " << fg[0] << std::endl;
     }
 
@@ -239,7 +239,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   options += "Sparse  true        reverse\n";
   // Currently the solver has a maximum time limit of 0.5 seconds.
   // Change this as you see fit.
-  options += "Numeric max_cpu_time          0.5\n";
+  options += "Numeric max_cpu_time          0.5\n";  //slow computer
 
   // place to return solution
   CppAD::ipopt::solve_result<Dvector> solution;
@@ -258,7 +258,7 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
     x1.push_back(solution.x[y_start+i]);  // y
   }
 
-  auto u1 = {solution.x[delta_start+1]/ (25.*M_PI/180.*Lf), solution.x[a_start]};
+  auto u1 = { solution.x[delta_start + 1] / (25.*M_PI / 180.), solution.x[a_start] };
   
   auto cost = solution.obj_value;
   //return std::make_tuple(x1, u1, cost);
