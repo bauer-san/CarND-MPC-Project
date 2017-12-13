@@ -1,3 +1,4 @@
+#define DEBUG 0
 #include "MPC.h"
 #include <cppad/cppad.hpp>
 #include <cppad/ipopt/solve.hpp>
@@ -18,7 +19,7 @@ const double dt=0.1;
 // NOTE: DON'T CHANGE THIS IT WAS CAREFULLY CHOSEN!!!
 const double Lf = 2.67;
 
-const double ref_v = 15.;	// reference longitudinal velocity, mps
+const double ref_v = 25.;	// reference longitudinal velocity, mps
 const double ref_cte = 0.; // reference cte, meters
 const double ref_epsi = 0.*M_PI / 180.; // reference psi, radians
 
@@ -33,7 +34,6 @@ size_t cte_start = v_start + N;
 size_t epsi_start = cte_start + N;
 size_t deltaLBO_start = epsi_start + N;
 size_t delta_start = deltaLBO_start + N;
-//size_t delta_start = epsi_start + N;
 size_t a_start = delta_start + N - 1;
 
 class FG_eval {
@@ -50,12 +50,18 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (int t = 0; t < N; t++) {
-      fg[0] += t/2*CppAD::pow(vars[cte_start + t] - ref_cte, 2);
-//      std::cout << "cte: " << fg[0] << std::endl;
+      fg[0] += 2*CppAD::pow(vars[cte_start + t] - ref_cte, 2);
+#if(DEBUG)
+      std::cout << "cte: " << fg[0] << std::endl;
+#endif
       fg[0] += CppAD::pow(vars[epsi_start + t] - ref_epsi, 2);
-//      std::cout << "epsi: " << fg[0] << std::endl;
+#if(DEBUG)
+      std::cout << "epsi: " << fg[0] << std::endl;
+#endif
       fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
-//      std::cout << "v: " << fg[0] << std::endl;
+#if(DEBUG)
+      std::cout << "v: " << fg[0] << std::endl;
+#endif
     }
 
     // Minimize the use of actuators.
@@ -66,8 +72,8 @@ class FG_eval {
 
     // Minimize the value gap between sequential actuations.
     for (int t = 0; t < N - 2; t++) {
-      fg[0] += CppAD::pow(vars[deltaLBO_start + t + 1] - vars[deltaLBO_start + t], 2);
-      fg[0] += CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 20*CppAD::pow(vars[deltaLBO_start + t + 1] - vars[deltaLBO_start + t], 2);
+      fg[0] += 20*CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
       fg[0] += CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
@@ -108,6 +114,7 @@ class FG_eval {
       AD<double> delta0 = vars[delta_start + t - 1];
       AD<double> a0 = vars[a_start + t - 1];
 
+      // desired path and
       AD<double> f0 =   coeffs[0]
                       + coeffs[1] * x0
                       + coeffs[2] * x0 * x0
@@ -130,7 +137,7 @@ class FG_eval {
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
       fg[1 + cte_start + t] = cte1 - ((y0 - f0) + (v0 * CppAD::sin(epsi0) * dt)); // original: cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
       fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) - v0 * deltaLBO0 / Lf * dt); // corrected for steering orientation
-      fg[1 + deltaLBO_start + t] = deltaLBO1 - delta0; // deltaLBO[t+1] = delta[t]
+      fg[1 + deltaLBO_start + t] = deltaLBO1 - (0.*deltaLBO0 + 1.0*delta0); // deltaLBO[t+1] = filtered(delta[t])
     }
   }
 };
@@ -147,15 +154,15 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
 
-  double x = x0[0];
-  double y = x0[1];
-  double psi = x0[2];
-  double v = x0[3];
-  double cte = x0[4];
-  double epsi = x0[5];
-  double delta = x0[6];
+  const double x = x0[0];
+  const double y = x0[1];
+  const double psi = x0[2];
+  const double v = x0[3];
+  const double cte = x0[4];
+  const double epsi = x0[5];
+  const double delta = x0[6];
 
-  int n_states = 7;
+  const int n_states = 7;
 
   // Number of variables (includes both states and inputs)
   size_t n_vars = N * n_states + (N - 1) * 2;
@@ -191,20 +198,21 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
   // The upper and lower limits of delta are set to -25 and 25
   // degrees (values in radians).
   // NOTE: Feel free to change this to something else.
+  double v_comp = std::max(0.01, v / 8.);
   for (int i = deltaLBO_start; i < delta_start; i++) {  //DELTA LBO
-    vars_lowerbound[i] = -0.436332;  //TODO: adjust
-    vars_upperbound[i] = 0.436332;
+    vars_lowerbound[i] = -0.436332 / v_comp;
+    vars_upperbound[i] = 0.436332 / v_comp;
   }
-  for (int i = delta_start; i < a_start; i++) {
-    vars_lowerbound[i] = -0.436332;  //TODO: adjust
-    vars_upperbound[i] = 0.436332;
+  for (int i = delta_start; i < a_start; i++) { // delta
+    vars_lowerbound[i] = -0.436332 / v_comp;
+    vars_upperbound[i] = 0.436332 / v_comp;
   }
 
   // Acceleration/decceleration upper and lower limits.
   // NOTE: Feel free to change this to something else.
   for (int i = a_start; i < n_vars; i++) {
-    vars_lowerbound[i] = -0.4; //TODO: adjust
-    vars_upperbound[i] = 0.4;
+    vars_lowerbound[i] = -0.6;
+    vars_upperbound[i] = 0.6;
   }
 
   // Lower and upper limits for the constraints
@@ -270,17 +278,16 @@ tuple<vector<double>, vector<double>, double> MPC::Solve(Eigen::VectorXd x0, Eig
     x1.push_back(solution.x[y_start+i]);  // y
   }
 
-#if(0)
+#if(DEBUG)
   std::cout << "solution.x" << std::endl;
   for (int i = deltaLBO_start; i < delta_start; i++) {
     std::cout << i << ", " << solution.x[i] << ", " << solution.x[i+N] << std::endl;
   }
 #endif
 
-  //OG latency compensation: auto u1 = { solution.x[delta_start + 1] / (25.*M_PI / 180.), solution.x[a_start] };
-  auto u1 = { solution.x[deltaLBO_start+1] / (25.*M_PI / 180.), solution.x[a_start] };
+  auto u1 = { solution.x[delta_start] / (25.*M_PI / 180.), solution.x[a_start] };
   
   auto cost = solution.obj_value;
-  //return std::make_tuple(x1, u1, cost);
+  
   return std::make_tuple(u1, x1, cost);
 }

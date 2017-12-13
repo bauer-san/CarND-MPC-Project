@@ -6,20 +6,18 @@ Self-Driving Car Engineer Nanodegree Program
 
 
 ### The Model
-The model is the same motion model that was used in the class with states:
-ego vehicle x position, ego vehicle y position, ego vehicle heading (psi), ego vehicle longitudinal velocity, cross track error, and heading error.
+The model is the same motion model that was used in the class with states: ego vehicle x position, ego vehicle y position, ego vehicle heading (psi), ego vehicle longitudinal velocity, cross track error, and heading error.
+To these, I added the steer angle.  In practice, I think this would let me model the dynamics of the steering system, from command to the actual tire steer angle.
 
 ### Timestep Length and Elapsed Duration (N & dt)
-I chose a value of 0.1 sec for dt because it fit with the model latency and a value of 10 loops for N to keep the compute time small-ish.
+I chose a value of 0.1 sec for dt because it fit with the model latency and a value of 10 loops for N to keep the compute time small-ish.  I had some stability trouble with the simulator sometimes publishing bad JSON data, which would cause the MPC program to throw a 'parse error' but that trouble did not seem to be related to compute time.
 
 ### Polynomial Fitting and MPC Preprocessing
-A simple 3rd order polynomial fit was used.
+The only MPC preprocessing was to transform the waypoints to the vehicle coordinate system then a 3rd order polynomial was fit to the waypoints.  The resulting polynomial was evaluated and used as the desired path.  Given more time to work on the project, I would want to smooth the waypoints to reduce or avoid the abrupt changes in the desired path.
 
 ### Model Predictive Control with Latency
-My preferred solution for latency includes adding a state for the steering signal.  This seems to be more sensible than projecting the measured state forward because IRL this additional steering state would include the dynamics of the steering system.  However, for this submission, I will test a delay of a single timestep (dt=0.1) by using the solution.x[delta_start+**1**]
+My solution for latency includes adding a state for the steering signal.  This seems to be more sensible than projecting the measured state forward because, in real life, this additional steering state could model the dynamics of the steering system.  
 
-I have been working on my preferred solution on a branch but it is not ready yet and the project is due.
- 
 ---
 
 ## Dependencies
